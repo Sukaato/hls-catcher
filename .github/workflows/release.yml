@@ -112,6 +112,7 @@ jobs:
           name: hls-catcher-${{ matrix.browser }}
           path: .output/*.zip
           if-no-files-found: error
+          include-hidden-files: true
 
   release:
     name: Tag & GitHub Release
