@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-@source "../../components/player/**/*.vue";
-@source "./App.vue";
-
 /* Player is a committed dark theme (no light variant). */
 @theme inline {
   --color-pl-bg: var(--pl-bg);

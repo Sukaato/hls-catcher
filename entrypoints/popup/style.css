@@ -1,8 +1,5 @@
 @import "tailwindcss";
 
-@source "../../components/popup/**/*.vue";
-@source "./App.vue";
-
 /* Bridge the runtime (light/dark) CSS variables to Tailwind color utilities. */
 @theme inline {
   --color-bg: var(--bg);
