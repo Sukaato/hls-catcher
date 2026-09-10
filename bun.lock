@@ -6,6 +6,7 @@
       "name": "wxt-vue-starter",
       "dependencies": {
         "hls.js": "^1.7.2",
+        "shaka-player": "^5.2.9",
         "vue": "^3.5.29",
       },
       "devDependencies": {
@@ -733,6 +734,8 @@
     "semver": ["semver@7.8.5", "", { "bin": { "semver": "bin/semver.js" } }, "sha512-Y7/KDsb8LjooZpwaqGyulO6DQlksgCncchHGk+sZIY4SBvUocMBEFH5Ur1fI4dV+Jvl0w6cjvucaIi40puRioA=="],
 
     "setimmediate": ["setimmediate@1.0.5", "", {}, "sha512-MATJdZp8sLqDl/68LfQmbP8zKPLQNV6BIZoIgrscFDQ+RsvK/BxeDQOgyxKKoh0y/8h3BqVFnCqQ/gd+reiIXA=="],
+
+    "shaka-player": ["shaka-player@5.2.9", "", {}, "sha512-tPeq2yv3Z9pQJskn5+0X5ys7cG5cX+CHfkIlVVahZ+RG4buTrgEwDh8cM7dmwVCUF7Pc6SW7wKbgp29/TGeP8Q=="],
 
     "shebang-command": ["shebang-command@2.0.0", "", { "dependencies": { "shebang-regex": "^3.0.0" } }, "sha512-kHxr2zZpYtdmrN1qDjrrX/Z1rR1kG8Dx+gkpK1G4eXmvXswmcE1hTWBWYUzlraYw1/yZp6YuDY77YtvbN0dmDA=="],
 

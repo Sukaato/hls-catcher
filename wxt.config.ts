@@ -15,4 +15,8 @@ export default defineConfig({
       default_title: 'HLS Catcher',
     },
   },
+  zip: {
+    // Local capture files must never end up in the Firefox sources bundle.
+    excludeSources: ['**/*.har'],
+  },
 });

@@ -13,8 +13,10 @@ export interface CapturedStream {
   lastSeen: number;
   /** How many times this exact URL was requested (live playlists refresh often). */
   count: number;
-  type: 'master' | 'media' | 'unknown';
-  /** Set once the background has fetched & parsed the playlist (success or failure). */
+  type: 'master' | 'media' | 'dash' | 'unknown';
+  /** DASH manifest guarded by DRM (Widevine / PlayReady). */
+  drm?: boolean;
+  /** Set once the background has fetched & parsed the manifest (success or failure). */
   analyzedAt?: number;
   analyzeError?: string;
   /** Quality variants (master) or a single "direct" entry (media). */
@@ -47,7 +49,9 @@ export interface AudioRendition {
 }
 
 export interface AnalyzeResult {
-  kind: 'master' | 'media';
+  kind: 'master' | 'media' | 'dash';
   variants: Variant[];
   audio: AudioRendition[];
+  /** DASH only: manifest carries `<ContentProtection>`. */
+  drm?: boolean;
 }

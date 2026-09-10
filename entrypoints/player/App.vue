@@ -5,6 +5,7 @@ import { onBeforeUnmount, onMounted, ref } from 'vue';
 const params = new URLSearchParams(location.search);
 const src = params.get('src') ?? '';
 const title = params.get('title') ?? '';
+const isDash = /\.mpd($|[?#])/i.test(src);
 
 const video = ref<HTMLVideoElement | null>(null);
 const levels = ref<Array<{ index: number; label: string }>>([]);
@@ -13,8 +14,16 @@ const status = ref<'loading' | 'playing' | 'error'>('loading');
 const errorMsg = ref('');
 
 let hls: Hls | null = null;
+let shakaPlayer: any = null;
+const shakaTracks = new Map<number, any>();
+let dashAuto = true;
 
 if (title) document.title = `${title} — HLS Catcher`;
+
+function fail(message: string): void {
+  status.value = 'error';
+  errorMsg.value = message;
+}
 
 function levelLabel(l: { height?: number; bitrate?: number }, i: number): string {
   const parts: string[] = [];
@@ -39,7 +48,85 @@ async function tryPlay(v: HTMLVideoElement): Promise<void> {
 
 function setLevel(index: number): void {
   currentLevel.value = index;
+  if (isDash && shakaPlayer) {
+    if (index === -1) {
+      dashAuto = true;
+      shakaPlayer.configure('abr.enabled', true);
+    } else {
+      dashAuto = false;
+      shakaPlayer.configure('abr.enabled', false);
+      const track = shakaTracks.get(index);
+      if (track) shakaPlayer.selectVariantTrack(track, true);
+    }
+    return;
+  }
   if (hls) hls.currentLevel = index;
+}
+
+function onShakaError(detail: any): void {
+  const msg = String(detail?.message ?? '');
+  if (detail?.category === 6 || /drm|license|widevine|playready/i.test(msg)) {
+    fail(
+      'Flux protégé par DRM (Widevine) — non lisible dans le lecteur. Utilise l’URL du manifest avec un outil externe (yt-dlp, N_m3u8DL-RE, …).',
+    );
+  } else {
+    fail(`Erreur DASH ${detail?.code ?? ''} : ${detail?.message ?? 'lecture impossible'}`);
+  }
+}
+
+async function setupDash(v: HTMLVideoElement): Promise<void> {
+  try {
+    const mod = await import('shaka-player/dist/shaka-player.compiled.js');
+    const shaka: any = (mod as any).default ?? (mod as any).shaka ?? (window as any).shaka;
+    shaka.polyfill.installAll();
+    if (!shaka.Player.isBrowserSupported()) {
+      fail('Ce navigateur ne peut pas lire le DASH.');
+      return;
+    }
+
+    const player = new shaka.Player();
+    await player.attach(v);
+    shakaPlayer = player;
+    player.addEventListener('error', (e: Event & { detail?: unknown }) => onShakaError(e.detail));
+    const syncActive = () => {
+      if (dashAuto) return;
+      const active = player.getVariantTracks().find((t: { active: boolean }) => t.active);
+      if (active) currentLevel.value = active.id;
+    };
+    player.addEventListener('adaptation', syncActive);
+    player.addEventListener('variantchanged', syncActive);
+
+    try {
+      await player.load(src);
+    } catch (e) {
+      onShakaError(e);
+      return;
+    }
+
+    const rows: Array<{ id: number; height: number; bandwidth: number }> = [];
+    const seen = new Set<number>();
+    for (const t of player.getVariantTracks() as Array<{
+      id: number;
+      height: number | null;
+      bandwidth: number | null;
+    }>) {
+      if (!t.height || seen.has(t.height)) continue;
+      seen.add(t.height);
+      shakaTracks.set(t.id, t);
+      rows.push({ id: t.id, height: t.height, bandwidth: t.bandwidth ?? 0 });
+    }
+    rows.sort((a, b) => b.height - a.height || b.bandwidth - a.bandwidth);
+    levels.value = rows.map((r) => ({
+      index: r.id,
+      label: r.bandwidth
+        ? `${r.height}p · ${(r.bandwidth / 1_000_000).toFixed(1)} Mb/s`
+        : `${r.height}p`,
+    }));
+
+    void tryPlay(v);
+  } catch (e) {
+    fail(`shaka-player indisponible : ${e instanceof Error ? e.message : String(e)}`);
+  }
 }
 
 onMounted(() => {
@@ -56,7 +143,9 @@ onMounted(() => {
     status.value = 'playing';
   });
 
-  if (Hls.isSupported()) {
+  if (isDash) {
+    void setupDash(v);
+  } else if (Hls.isSupported()) {
     hls = new Hls({ enableWorker: true, lowLatencyMode: true, backBufferLength: 90 });
     hls.loadSource(src);
     hls.attachMedia(v);
@@ -95,6 +184,7 @@ onMounted(() => {
 
 onBeforeUnmount(() => {
   hls?.destroy();
+  shakaPlayer?.destroy();
 });
 </script>
 

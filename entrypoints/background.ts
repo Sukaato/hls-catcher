@@ -1,5 +1,6 @@
 import { parsePlaylist } from '@/lib/m3u8';
 import { allFilters, matchStream } from '@/lib/modules';
+import { parseMpd } from '@/lib/mpd';
 import type { CapturedStream } from '@/lib/types';
 
 const IS_CHROME = import.meta.env.CHROME;
@@ -75,8 +76,16 @@ export default defineBackground(() => {
   // -------------------------------------------------------- fetch + analyse --
   async function fetchAndParse(stream: CapturedStream) {
     const resp = await fetch(stream.url, { credentials: 'include' });
-    if (!resp.ok) throw new Error(`HTTP ${resp.status} en récupérant la playlist`);
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} en récupérant le manifest`);
     const text = await resp.text();
+    const contentType = resp.headers.get('content-type') ?? '';
+
+    const isDash =
+      /\.mpd($|[?#])/i.test(stream.url) || /dash\+xml/i.test(contentType) || text.includes('<MPD');
+    if (isDash) {
+      if (!text.includes('<MPD')) throw new Error('Réponse non reconnue comme manifest DASH');
+      return parseMpd(text, stream.url);
+    }
     if (!text.includes('#EXTM3U')) {
       throw new Error('La réponse ne ressemble pas à une playlist HLS');
     }
@@ -92,6 +101,7 @@ export default defineBackground(() => {
       stream.type = result.kind;
       stream.variants = result.variants;
       stream.audio = result.audio;
+      stream.drm = result.drm;
       stream.analyzeError = undefined;
     } catch (e) {
       stream.analyzeError = e instanceof Error ? e.message : String(e);

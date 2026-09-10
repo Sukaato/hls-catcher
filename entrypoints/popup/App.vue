@@ -103,11 +103,13 @@ onUnmounted(() => {
           <div class="loc">
             <span class="title-row">
               <span class="src">{{ moduleLabel(s.moduleId) }}</span>
+              <span v-if="s.drm" class="drm" title="Flux protégé par DRM">🔒 DRM</span>
               <span class="channel">{{ s.title }}</span>
             </span>
             <span class="sub">
+              <template v-if="s.type === 'dash'">DASH · </template>
               <template v-if="s.variants?.length">{{ s.variants.length }} qualités</template>
-              <template v-else-if="s.analyzeError">playlist non lue</template>
+              <template v-else-if="s.analyzeError">{{ s.type === 'dash' ? 'manifest' : 'playlist' }} non lu</template>
               <template v-else>analyse…</template>
             </span>
           </div>
@@ -115,22 +117,35 @@ onUnmounted(() => {
         </div>
 
         <div class="actions">
-          <button class="primary" @click="openPlayer(s.url, s)">Ouvrir (auto + menu qualité)</button>
-          <button class="soft" @click="copy(s.url)">{{ copied === s.url ? 'Copié' : 'Copier' }}</button>
+          <button v-if="s.drm" class="primary" @click="copy(s.url)">
+            {{ copied === s.url ? 'URL du manifest copiée' : "Copier l'URL du manifest" }}
+          </button>
+          <template v-else>
+            <button class="primary" @click="openPlayer(s.url, s)">
+              Ouvrir{{ s.type === 'dash' ? '' : ' (auto + menu qualité)' }}
+            </button>
+            <button class="soft" @click="copy(s.url)">{{ copied === s.url ? 'Copié' : 'Copier' }}</button>
+          </template>
           <button class="soft" @click="openRaw(s.url)">URL brute</button>
           <button v-if="s.analyzeError" class="soft" @click="retry(s)">Réessayer</button>
         </div>
 
-        <p v-if="s.analyzeError" class="note err">
+        <p v-if="s.drm" class="note err">
+          Flux DRM (Widevine) — le lecteur intégré ne peut pas le lire. Copie l'URL du
+          manifest pour un outil externe (yt-dlp, N_m3u8DL-RE, …).
+        </p>
+        <p v-else-if="s.analyzeError" class="note err">
           {{ s.analyzeError }} — le stream reste ouvrable en « auto ».
         </p>
 
         <ul v-if="s.variants?.length" class="variants">
-          <li v-for="v in s.variants" :key="v.uri">
+          <li v-for="v in s.variants" :key="v.uri + v.label">
             <span class="q">{{ v.label }}</span>
             <span class="grow" />
-            <button class="mini" @click="openPlayer(v.uri, s, v.label)">Ouvrir</button>
-            <button class="mini" @click="copy(v.uri)">{{ copied === v.uri ? '✓' : 'Copier' }}</button>
+            <template v-if="s.type !== 'dash'">
+              <button class="mini" @click="openPlayer(v.uri, s, v.label)">Ouvrir</button>
+              <button class="mini" @click="copy(v.uri)">{{ copied === v.uri ? '✓' : 'Copier' }}</button>
+            </template>
           </li>
         </ul>
 
@@ -141,7 +156,8 @@ onUnmounted(() => {
     </div>
 
     <footer>
-      Le stream s'ouvre dans un lecteur intégré (hls.js). « URL brute » = lien direct pour VLC/mpv.
+      Lecteur intégré : HLS via hls.js, DASH via shaka-player. Les flux DRM (Crunchyroll)
+      ne sont pas lisibles — « URL brute » / « Copier » pour un outil externe.
     </footer>
   </div>
 </template>
@@ -238,6 +254,16 @@ header {
   border-radius: 4px;
   background: color-mix(in srgb, var(--accent) 18%, transparent);
   color: var(--accent);
+}
+
+.drm {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
 }
 
 .channel {

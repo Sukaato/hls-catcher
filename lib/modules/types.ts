@@ -21,8 +21,8 @@ export interface ModuleMatch {
   title: string;
   /** Referer to replay on the player tab so the CDN serves the segments. */
   referer?: string;
-  /** Optional hint; the m3u8 analyzer still has the final say. */
-  kind?: 'master' | 'media';
+  /** Optional hint; the manifest analyzer still has the final say. */
+  kind?: 'master' | 'media' | 'dash';
 }
 
 export interface StreamModule {
@@ -39,8 +39,14 @@ export interface StreamModule {
 }
 
 const M3U8_RE = /\.m3u8($|[?#])/i;
+const MPD_RE = /\.mpd($|[?#])/i;
 
 /** Shared helper: is this URL an HLS playlist? */
 export function isM3u8(url: string): boolean {
   return M3U8_RE.test(url);
+}
+
+/** Shared helper: is this URL a DASH manifest? */
+export function isMpd(url: string): boolean {
+  return MPD_RE.test(url);
 }
