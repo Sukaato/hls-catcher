@@ -1,8 +1,12 @@
+import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'wxt';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ['@wxt-dev/module-vue'],
+  vite: () => ({
+    plugins: [tailwindcss()],
+  }),
   manifest: {
     name: 'HLS Catcher',
     description: 'Ouvre le stream Twitch (HLS) seul dans un onglet, avec le choix de la qualité.',
