@@ -13,8 +13,14 @@ const { video, levels, currentLevel, status, errorMsg, setLevel } = usePlayer(sr
 </script>
 
 <template>
-  <div class="wrap">
-    <video ref="video" class="video" controls autoplay playsinline></video>
+  <div class="relative flex h-full flex-col">
+    <video
+      ref="video"
+      class="min-h-0 w-full flex-1 bg-black object-contain"
+      controls
+      autoplay
+      playsinline
+    ></video>
 
     <PlayerBar
       :src="src"
@@ -28,20 +34,3 @@ const { video, levels, currentLevel, status, errorMsg, setLevel } = usePlayer(sr
     <ErrorOverlay v-if="status === 'error'" :message="errorMsg" />
   </div>
 </template>
-
-<style scoped>
-.wrap {
-  position: relative;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-}
-
-.video {
-  flex: 1;
-  min-height: 0;
-  width: 100%;
-  background: #000;
-  object-fit: contain;
-}
-</style>

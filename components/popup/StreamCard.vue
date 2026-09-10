@@ -2,6 +2,7 @@
 import QualityList from '@/components/popup/QualityList.vue';
 import { useCopy } from '@/composables/useCopy';
 import type { CapturedStream } from '@/lib/types';
+import { Check, Copy, ExternalLink, Play, RefreshCw } from '@lucide/vue';
 import { computed } from 'vue';
 
 const props = defineProps<{ stream: CapturedStream }>();
@@ -26,34 +27,37 @@ const audioSummary = computed(() =>
 </script>
 
 <template>
-  <section class="stream">
-    <div class="head">
-      <div class="loc">
-        <span class="channel">{{ stream.channel }}</span>
-        <span class="sub">{{ subLabel }}</span>
+  <section class="rounded-[10px] border border-card-border bg-card p-2.5">
+    <div class="flex items-baseline gap-2">
+      <div class="flex min-w-0 flex-1 items-baseline gap-2">
+        <span class="min-w-0 truncate text-[15px] font-bold">{{ stream.channel }}</span>
+        <span class="whitespace-nowrap text-xs text-muted">{{ subLabel }}</span>
       </div>
-      <span class="count" title="requêtes vues">×{{ stream.count }}</span>
+      <span class="flex-none text-xs text-muted" title="requêtes vues">×{{ stream.count }}</span>
     </div>
 
-    <div class="actions">
-      <button type="button" class="primary" @click="emit('open', stream.url, stream)">
-        Ouvrir (auto + menu qualité)
+    <div class="mt-2.5 flex flex-wrap gap-1.5">
+      <button type="button" class="btn-primary" @click="emit('open', stream.url, stream)">
+        <Play :size="13" /> Ouvrir <span class="font-normal opacity-80">(auto + menu qualité)</span>
       </button>
-      <button type="button" class="soft" @click="copy(stream.url)">
+      <button type="button" class="btn-soft" @click="copy(stream.url)">
+        <component :is="copied === stream.url ? Check : Copy" :size="13" />
         {{ copied === stream.url ? 'Copié' : 'Copier' }}
       </button>
-      <button type="button" class="soft" @click="emit('openRaw', stream.url)">URL brute</button>
+      <button type="button" class="btn-soft" @click="emit('openRaw', stream.url)">
+        <ExternalLink :size="13" /> URL brute
+      </button>
       <button
         v-if="stream.analyzeError"
         type="button"
-        class="soft"
+        class="btn-soft"
         @click="emit('retry', stream)"
       >
-        Réessayer
+        <RefreshCw :size="13" /> Réessayer
       </button>
     </div>
 
-    <p v-if="stream.analyzeError" class="note err">
+    <p v-if="stream.analyzeError" class="mt-2 text-[12.5px] text-danger">
       {{ stream.analyzeError }} — le stream reste ouvrable en « auto ».
     </p>
 
@@ -63,93 +67,8 @@ const audioSummary = computed(() =>
       @open="(uri, label) => emit('open', uri, stream, label)"
     />
 
-    <p v-if="stream.audio?.length" class="note">
+    <p v-if="stream.audio?.length" class="mt-2 text-[12.5px] text-muted">
       {{ stream.audio.length }} piste(s) audio : {{ audioSummary }}
     </p>
   </section>
 </template>
-
-<style scoped>
-.stream {
-  border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--border));
-  border-radius: 10px;
-  background: var(--card);
-  padding: 10px;
-}
-
-.head {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.loc {
-  min-width: 0;
-  flex: 1;
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.channel {
-  font-weight: 700;
-  font-size: 15px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sub {
-  font-size: 12px;
-  color: var(--muted);
-  white-space: nowrap;
-}
-
-.count {
-  flex: none;
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.actions button {
-  font: inherit;
-  cursor: pointer;
-  border-radius: 7px;
-  padding: 6px 10px;
-  border: 1px solid transparent;
-}
-
-.primary {
-  background: var(--accent);
-  color: var(--accent-fg);
-  font-weight: 600;
-}
-.primary:hover {
-  filter: brightness(1.05);
-}
-
-.soft {
-  background: transparent;
-  border-color: var(--border);
-  color: var(--fg);
-}
-.soft:hover {
-  border-color: var(--accent);
-}
-
-.note {
-  margin: 8px 0 0;
-  font-size: 12.5px;
-  color: var(--muted);
-}
-.note.err {
-  color: var(--danger);
-}
-</style>

@@ -62,13 +62,17 @@ driven by `.github/changelog-config.json` (prefixes `feat:`, `fix:`, `perf:`, â€
 | Path | Role |
 | --- | --- |
 | `entrypoints/background.ts` | `usher.ttvnw.net` interception, channel parsing, per-tab store, badge, `Referer` spoof, message API |
-| `entrypoints/popup/` | popup entry: `App.vue` (thin) + `style.css` (theme tokens) |
-| `entrypoints/player/` | player entry: `App.vue` (thin) + `style.css` (`--pl-*` tokens) |
+| `entrypoints/popup/` | popup entry: `App.vue` (thin) + `style.css` (`@import "tailwindcss"` + theme tokens + `@layer components` buttons) |
+| `entrypoints/player/` | player entry: `App.vue` (thin) + `style.css` (`@import "tailwindcss"` + `--pl-*` tokens) |
 | `components/popup/` | `PopupHeader`, `EmptyState`, `StreamCard`, `QualityList` |
 | `components/player/` | `PlayerBar`, `QualitySelect`, `ErrorOverlay` |
 | `composables/` | `useStreams` (popup â†” background), `usePlayer` (hls.js lifecycle), `useCopy` (shared clipboard state) |
 | `lib/m3u8.ts` | Master playlist parser (handles Twitch `#EXT-X-MEDIA:TYPE=VIDEO` names) |
 | `lib/types.ts` | Shared types |
+
+UI: Vue 3 SFCs styled with **Tailwind CSS v4** (`@tailwindcss/vite`, wired in `wxt.config.ts`;
+runtime light/dark via CSS vars bridged to color utilities in `@theme inline`), icons from
+**`@lucide/vue`**. No component ships a `<style>` block.
 
 Permissions: `webRequest`, `tabs`, `storage`, `declarativeNetRequestWithHostAccess`; hosts
 `*://*.twitch.tv/*` and `*://*.ttvnw.net/*`.

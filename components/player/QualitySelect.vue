@@ -10,29 +10,15 @@ function onChange(e: Event): void {
 </script>
 
 <template>
-  <label class="quality">
+  <label class="flex items-center gap-1.5 text-pl-dim">
     Qualité
-    <select :value="currentLevel" @change="onChange">
+    <select
+      :value="currentLevel"
+      class="rounded-md border border-pl-border-strong bg-pl-bg px-1.5 py-1 text-[13px] text-pl-fg"
+      @change="onChange"
+    >
       <option :value="-1">Auto</option>
       <option v-for="l in levels" :key="l.index" :value="l.index">{{ l.label }}</option>
     </select>
   </label>
 </template>
-
-<style scoped>
-.quality {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: var(--pl-dim);
-}
-
-.quality select {
-  background: var(--pl-bg);
-  color: var(--pl-fg);
-  border: 1px solid var(--pl-border-strong);
-  border-radius: 6px;
-  padding: 4px 6px;
-  font-size: 13px;
-}
-</style>

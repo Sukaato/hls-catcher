@@ -8,12 +8,12 @@ const { streams, ready, retry, openPlayer, openRaw, clearAll } = useStreams();
 </script>
 
 <template>
-  <div class="app">
+  <div class="flex flex-col">
     <PopupHeader :show-clear="streams.length > 0" @clear="clearAll" />
 
     <EmptyState v-if="!ready || !streams.length" :ready="ready" />
 
-    <div v-else class="list">
+    <div v-else class="flex max-h-[470px] flex-col gap-2 overflow-y-auto p-2">
       <StreamCard
         v-for="s in streams"
         :key="s.id"
@@ -24,31 +24,8 @@ const { streams, ready, retry, openPlayer, openRaw, clearAll } = useStreams();
       />
     </div>
 
-    <footer>
+    <footer class="border-t border-border px-3 pt-2 pb-3 text-[11.5px] text-muted">
       Le stream s'ouvre dans un lecteur intégré (hls.js). « URL brute » = lien direct pour VLC/mpv.
     </footer>
   </div>
 </template>
-
-<style scoped>
-.app {
-  display: flex;
-  flex-direction: column;
-}
-
-.list {
-  padding: 8px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  max-height: 470px;
-  overflow-y: auto;
-}
-
-footer {
-  padding: 8px 12px 12px;
-  font-size: 11.5px;
-  color: var(--muted);
-  border-top: 1px solid var(--border);
-}
-</style>

@@ -1,51 +1,20 @@
 <script setup lang="ts">
+import { TriangleAlert } from '@lucide/vue';
+
 defineProps<{ message: string }>();
 </script>
 
 <template>
-  <div class="overlay">
-    <div class="card">
-      <strong>Lecture impossible</strong>
-      <p>{{ message }}</p>
-      <p class="hint">
+  <div class="absolute inset-0 grid place-items-center bg-black/70 p-6">
+    <div class="max-w-[440px] rounded-xl border border-pl-border-strong bg-pl-bg px-[22px] py-5">
+      <strong class="flex items-center gap-1.5 text-red-400">
+        <TriangleAlert :size="16" /> Lecture impossible
+      </strong>
+      <p class="mt-2 text-sm leading-normal text-pl-dim">{{ message }}</p>
+      <p class="mt-2 text-[13px] text-pl-muted">
         Le flux exige peut-être des cookies ou une authentification liés au site d'origine.
         Essaie « URL brute » dans VLC ou mpv.
       </p>
     </div>
   </div>
 </template>
-
-<style scoped>
-.overlay {
-  position: absolute;
-  inset: 0;
-  display: grid;
-  place-items: center;
-  background: rgba(0, 0, 0, 0.7);
-  padding: 24px;
-}
-
-.card {
-  max-width: 440px;
-  background: var(--pl-bg);
-  border: 1px solid var(--pl-border-strong);
-  border-radius: 12px;
-  padding: 20px 22px;
-}
-
-.card strong {
-  color: #f87171;
-}
-
-.card p {
-  margin: 8px 0 0;
-  color: var(--pl-dim);
-  font-size: 14px;
-  line-height: 1.5;
-}
-
-.card .hint {
-  color: var(--pl-muted);
-  font-size: 13px;
-}
-</style>
