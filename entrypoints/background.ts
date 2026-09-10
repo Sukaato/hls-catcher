@@ -1,21 +1,9 @@
 import { parsePlaylist } from '@/lib/m3u8';
+import { allFilters, matchStream } from '@/lib/modules';
 import type { CapturedStream } from '@/lib/types';
 
 const IS_CHROME = import.meta.env.CHROME;
 const SESSION_KEY = 'hlscatcher:streams';
-
-// Twitch master playlist, e.g.
-//   https://usher.ttvnw.net/api/v2/channel/hls/<channel>.m3u8?...
-//   https://usher.ttvnw.net/api/channel/hls/<channel>.m3u8?...   (older)
-const USHER_URLS = [
-  '*://usher.ttvnw.net/api/*/channel/hls/*',
-  '*://usher.ttvnw.net/api/channel/hls/*',
-];
-const CHANNEL_RE = /\/channel\/hls\/([^/.?#]+)\.m3u8/i;
-
-function twitchChannel(url: string): string | undefined {
-  return CHANNEL_RE.exec(url)?.[1]?.toLowerCase();
-}
 
 export default defineBackground(() => {
   /** tabId -> (url -> stream). */
@@ -112,45 +100,70 @@ export default defineBackground(() => {
     schedulePersist();
   }
 
-  const record = (tabId: number, url: string, referer?: string): void => {
-    if (tabId < 0) return;
-    const channel = twitchChannel(url);
-    if (!channel) return; // only the channel master playlist
+  const touch = (tabId: number, url: string): boolean => {
+    const cur = store.get(tabId)?.get(url);
+    if (!cur) return false;
+    cur.lastSeen = Date.now();
+    cur.count++;
+    schedulePersist();
+    return true;
+  };
 
-    const m = tabMap(tabId);
+  const record = (
+    tabId: number,
+    url: string,
+    info: { moduleId: string; title: string; referer?: string },
+  ): void => {
+    if (tabId < 0 || touch(tabId, url)) return;
     const now = Date.now();
-    const cur = m.get(url);
-    if (cur) {
-      cur.lastSeen = now;
-      cur.count++;
-      if (referer && !cur.referer) cur.referer = referer;
-    } else {
-      m.set(url, {
-        id: idFor(url),
-        url,
-        tabId,
-        channel,
-        referer: referer || `https://www.twitch.tv/${channel}`,
-        firstSeen: now,
-        lastSeen: now,
-        count: 1,
-        type: 'unknown',
-      });
-      // Parse it now, while the single-use token in the URL is still fresh.
-      void analyzeAndStore(tabId, url);
-    }
+    tabMap(tabId).set(url, {
+      id: idFor(url),
+      url,
+      tabId,
+      moduleId: info.moduleId,
+      title: info.title,
+      referer: info.referer,
+      firstSeen: now,
+      lastSeen: now,
+      count: 1,
+      type: 'unknown',
+    });
+    // Parse it now, while any single-use token in the URL is still fresh.
+    void analyzeAndStore(tabId, url);
     updateBadge(tabId);
     schedulePersist();
   };
 
   // --------------------------------------------------------------- detection --
   const reqSpec = ['requestHeaders', ...(IS_CHROME ? ['extraHeaders'] : [])];
+
+  const onRequest = async (d: {
+    url: string;
+    tabId: number;
+    requestHeaders?: Array<{ name: string; value?: string }>;
+  }): Promise<void> => {
+    if (d.tabId < 0 || touch(d.tabId, d.url)) return;
+    const tab = await browser.tabs.get(d.tabId).catch(() => null);
+    const hit = matchStream({
+      url: d.url,
+      tabId: d.tabId,
+      tabUrl: tab?.url,
+      tabTitle: tab?.title,
+      headers: headerMap(d.requestHeaders),
+    });
+    if (!hit) return;
+    record(d.tabId, d.url, {
+      moduleId: hit.module.id,
+      title: hit.match.title,
+      referer: hit.match.referer,
+    });
+  };
+
   browser.webRequest.onSendHeaders.addListener(
     (d) => {
-      const h = headerMap(d.requestHeaders);
-      record(d.tabId, d.url, h.referer);
+      void onRequest(d);
     },
-    { urls: USHER_URLS },
+    { urls: allFilters },
     reqSpec as string[] as never,
   );
 

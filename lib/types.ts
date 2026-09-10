@@ -3,12 +3,12 @@ export interface CapturedStream {
   id: string;
   url: string;
   tabId: number;
-  /** Twitch channel name, parsed from the usher URL. */
-  channel?: string;
-  /** Referer sent by the page when it fetched the playlist (best guess). */
+  /** Id of the site module that recognised this stream (e.g. `twitch`). */
+  moduleId: string;
+  /** Display label from the module (channel, series + episode, page title…). */
+  title: string;
+  /** Referer to replay on the player tab so the CDN serves the segments. */
   referer?: string;
-  /** Origin of the page that requested the stream. */
-  pageOrigin?: string;
   firstSeen: number;
   lastSeen: number;
   /** How many times this exact URL was requested (live playlists refresh often). */

@@ -9,8 +9,17 @@ const ready = ref(false);
 const copied = ref<string | null>(null);
 let timer: ReturnType<typeof setInterval> | undefined;
 
+const MODULE_LABELS: Record<string, string> = {
+  twitch: 'Twitch',
+  crunchyroll: 'Crunchyroll',
+};
+
 function send(msg: Record<string, unknown>): Promise<any> {
   return browser.runtime.sendMessage(msg);
+}
+
+function moduleLabel(id: string): string {
+  return MODULE_LABELS[id] ?? id;
 }
 
 const sorted = computed(() => [...streams.value].sort((a, b) => b.lastSeen - a.lastSeen));
@@ -36,7 +45,7 @@ function openPlayer(url: string, s: CapturedStream, label?: string): void {
     url,
     tabId: tabId.value,
     referer: s.referer ?? '',
-    title: label ? `${s.channel} — ${label}` : s.channel,
+    title: label ? `${s.title} — ${label}` : s.title,
   });
   window.close();
 }
@@ -83,16 +92,19 @@ onUnmounted(() => {
 
     <p v-if="!ready" class="empty">Recherche…</p>
     <p v-else-if="!streams.length" class="empty">
-      Aucun stream Twitch détecté sur cet onglet.<br />
-      Ouvre une chaîne, lance la lecture, puis rouvre ce popup.<br />
-      <span class="hint">Si la chaîne tournait déjà, recharge l'onglet.</span>
+      Aucun stream détecté sur cet onglet (Twitch ou Crunchyroll).<br />
+      Lance la lecture de la vidéo, puis rouvre ce popup.<br />
+      <span class="hint">Si elle tournait déjà, recharge l'onglet.</span>
     </p>
 
     <div v-else class="list">
       <section v-for="s in sorted" :key="s.id" class="stream">
         <div class="head">
           <div class="loc">
-            <span class="channel">{{ s.channel }}</span>
+            <span class="title-row">
+              <span class="src">{{ moduleLabel(s.moduleId) }}</span>
+              <span class="channel">{{ s.title }}</span>
+            </span>
             <span class="sub">
               <template v-if="s.variants?.length">{{ s.variants.length }} qualités</template>
               <template v-else-if="s.analyzeError">playlist non lue</template>
@@ -205,8 +217,27 @@ header {
   min-width: 0;
   flex: 1;
   display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.title-row {
+  display: flex;
   align-items: baseline;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
+}
+
+.src {
+  flex: none;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--accent) 18%, transparent);
+  color: var(--accent);
 }
 
 .channel {

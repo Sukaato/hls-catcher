@@ -1,29 +1,33 @@
 # HLS Catcher
 
-Chrome extension (MV3, built with [WXT](https://wxt.dev)) that **detects the HLS stream of a
-Twitch channel** and lets you **open it alone in a tab**, in a built-in player, with a
+Chrome extension (MV3, built with [WXT](https://wxt.dev)) that **detects the HLS stream** of
+a supported site and lets you **open it alone in a tab**, in a built-in player, with a
 **quality picker**.
 
-Twitch-focused: only the master playlist
-`usher.ttvnw.net/api/…/channel/hls/<channel>.m3u8` is intercepted (the one that lists every
-quality).
+Supported sites are **modules** (`lib/modules/`). Shipped:
+
+| Module | Watches | Title |
+| --- | --- | --- |
+| `twitch` | `usher.ttvnw.net/api/…/channel/hls/<channel>.m3u8` (the master playlist) | channel name |
+| `crunchyroll` | `*.m3u8` requests from a `crunchyroll.com` tab (`*.vrv.co`, `*.crunchyrollsvc.com`) | tab title, cleaned up |
 
 ## What it does
 
-- The service worker listens to `webRequest` **only on `usher.ttvnw.net`** and keeps the
-  master playlist URL, per tab, with the channel name parsed from the URL. A badge on the
+- The service worker listens to `webRequest` on the **union of every module's filters**. For
+  each matching request it asks the modules, in order, whether it's a capturable stream; the
+  first match wins and is stored per tab with its module id + a display title. A badge on the
   icon shows how many streams were detected.
-- That playlist is **fetched and parsed immediately** (while its token is still fresh). The
-  result is kept in `storage.session` so it survives the service worker being suspended.
-- The popup shows, per channel:
+- That playlist is **fetched and parsed immediately** (while any single-use token in the URL
+  is still fresh). The result is kept in `storage.session` so it survives the service worker
+  being suspended.
+- The popup shows, per stream (tagged with its site):
   - **Open (auto + quality menu)** → `hls.js` player on the master playlist, automatic
     quality + a selector inside the player.
   - the quality list (`1080p60 (source) · 6.5 Mb/s`, `720p60 …`, `Audio Only …`), each with
     its own **Open** button (quality locked).
   - **Copy** / **Raw URL** → direct link for VLC, mpv, `ffmpeg`, `yt-dlp`, etc.
-- When the player opens, a `declarativeNetRequest` session rule re-injects the
-  `Referer` / `Origin` `https://www.twitch.tv/…` on that tab's requests. The rule is removed
-  when the tab closes.
+- When the player opens, a `declarativeNetRequest` session rule re-injects the module's
+  `Referer` / `Origin` on that tab's requests. The rule is removed when the tab closes.
 
 ## Development
 
@@ -61,30 +65,35 @@ driven by `.github/changelog-config.json` (prefixes `feat:`, `fix:`, `perf:`, �
 
 | Path | Role |
 | --- | --- |
-| `entrypoints/background.ts` | `usher.ttvnw.net` interception, channel parsing, per-tab store, badge, `Referer` spoof, message API |
-| `entrypoints/popup/` | Vue UI: streams per channel + qualities |
+| `entrypoints/background.ts` | webRequest interception, per-tab store, badge, immediate parse, `Referer` spoof, message API — **no site knowledge** |
+| `entrypoints/popup/` | Vue UI: streams per site + qualities |
 | `entrypoints/player/` | `hls.js` player page (`player.html?src=…&referer=…`) |
+| `lib/modules/` | One file per site (`twitch.ts`, `crunchyroll.ts`) + `index.ts` registry; `types.ts` is the `StreamModule` contract |
 | `lib/m3u8.ts` | Master playlist parser (handles Twitch `#EXT-X-MEDIA:TYPE=VIDEO` names) |
-| `lib/types.ts` | Shared types |
+| `lib/types.ts` | Shared types (`CapturedStream`, `Variant`, …) |
 
-Permissions: `webRequest`, `tabs`, `storage`, `declarativeNetRequestWithHostAccess`; hosts
-`*://*.twitch.tv/*` and `*://*.ttvnw.net/*`.
+Permissions: `webRequest`, `tabs`, `storage`, `declarativeNetRequestWithHostAccess`.
+`host_permissions` is the union of every module's `hostPermissions`, injected into the
+manifest from `wxt.config.ts`.
 
 ## Known limitations
 
-- **The master playlist must go through while the extension is listening.** It's requested
-  only once when playback starts; if the extension was enabled afterwards, reload the tab —
-  the new master will be captured, parsed and persisted.
+- **The playlist must go through while the extension is listening.** A Twitch master is
+  requested only once when playback starts; if the extension was enabled afterwards, reload
+  the tab — it will be captured, parsed and persisted.
 - Without being logged into Twitch, resolutions above 1080p (1440p/4K) are absent from the
   playlist — that's Twitch removing them, not the extension.
+- Crunchyroll serves most catalogue content with Widevine DRM; `hls.js` can't play those.
+  DRM-free manifests (trailers, some regions/titles) work. Otherwise: "Raw URL" + VLC.
 - The player cannot play a stream behind a geo-block or account authentication. In that
   case: "Raw URL" + VLC.
 - The store lives in memory in the service worker, with a copy in `storage.session` (lost
   when the browser closes, not when the SW is suspended).
 - Icons are the WXT template ones — replace them in `public/icon/`.
 
-## Re-opening to other platforms
+## Adding a site (modules)
 
-All the Twitch filtering lives in `entrypoints/background.ts` (`USHER_URLS`, `CHANNEL_RE`,
-`twitchChannel`) and `host_permissions` in `wxt.config.ts`. The parser and the player are
-generic.
+Create `lib/modules/<site>.ts` exporting a `StreamModule` (`id`, `label`, `hostPermissions`,
+`filters`, `match()`), then add it to the array in `lib/modules/index.ts`. `match()` gets
+`{ url, tabId, tabUrl, tabTitle, headers }` and returns `{ title, referer, kind }` or `null`.
+`background.ts`, the popup and the player stay untouched; `host_permissions` updates itself.

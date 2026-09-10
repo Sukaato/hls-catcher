@@ -1,15 +1,16 @@
 import { defineConfig } from 'wxt';
+import { allHostPermissions } from './lib/modules';
 
 // See https://wxt.dev/api/config.html
 export default defineConfig({
   modules: ['@wxt-dev/module-vue'],
   manifest: {
     name: 'HLS Catcher',
-    description: 'Ouvre le stream Twitch (HLS) seul dans un onglet, avec le choix de la qualité.',
-    // usher.ttvnw.net = master playlist ; *.ttvnw.net = playlists de qualité + segments
-    // (nécessaire pour l'observation webRequest et la règle Referer du lecteur).
+    description: 'Open a Twitch or Crunchyroll HLS stream alone in a tab, with a quality picker.',
     permissions: ['webRequest', 'tabs', 'storage', 'declarativeNetRequestWithHostAccess'],
-    host_permissions: ['*://*.twitch.tv/*', '*://*.ttvnw.net/*'],
+    // One entry per site module (see lib/modules/*): needed for webRequest
+    // observation, the background manifest fetch and the player's Referer rule.
+    host_permissions: allHostPermissions,
     action: {
       default_title: 'HLS Catcher',
     },
