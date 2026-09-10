@@ -62,8 +62,11 @@ driven by `.github/changelog-config.json` (prefixes `feat:`, `fix:`, `perf:`, �
 | Path | Role |
 | --- | --- |
 | `entrypoints/background.ts` | `usher.ttvnw.net` interception, channel parsing, per-tab store, badge, `Referer` spoof, message API |
-| `entrypoints/popup/` | Vue UI: streams per channel + qualities |
-| `entrypoints/player/` | `hls.js` player page (`player.html?src=…&referer=…`) |
+| `entrypoints/popup/` | popup entry: `App.vue` (thin) + `style.css` (theme tokens) |
+| `entrypoints/player/` | player entry: `App.vue` (thin) + `style.css` (`--pl-*` tokens) |
+| `components/popup/` | `PopupHeader`, `EmptyState`, `StreamCard`, `QualityList` |
+| `components/player/` | `PlayerBar`, `QualitySelect`, `ErrorOverlay` |
+| `composables/` | `useStreams` (popup ↔ background), `usePlayer` (hls.js lifecycle), `useCopy` (shared clipboard state) |
 | `lib/m3u8.ts` | Master playlist parser (handles Twitch `#EXT-X-MEDIA:TYPE=VIDEO` names) |
 | `lib/types.ts` | Shared types |
 
