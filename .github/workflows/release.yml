@@ -1,0 +1,167 @@
+name: Release
+
+on:
+  workflow_dispatch:
+    inputs:
+      bump:
+        description: 'Version bump type'
+        required: true
+        type: choice
+        options:
+          - major
+          - minor
+          - patch
+      pre_release:
+        description: 'Pre-release identifier'
+        required: false
+        type: choice
+        options:
+          - none
+          - alpha
+          - beta
+          - rc
+        default: 'none'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Compute version
+    runs-on: ubuntu-latest
+    outputs:
+      next-version: ${{ steps.bumped-version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Get current version
+        id: current-version
+        run: echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Calculate next version
+        id: next-version
+        uses: actions/github-script@v7
+        with:
+          result-encoding: string
+          script: |
+            const bump = context.payload.inputs.bump;
+            const pre = context.payload.inputs.pre_release === 'none' ? null : context.payload.inputs.pre_release;
+            const current = '${{ steps.current-version.outputs.version }}';
+            const isPreRelease = current.includes('-');
+            const isSamePre = isPreRelease && current.includes(`-${pre}.`);
+
+            if (pre) {
+              if (isSamePre) return `prerelease --preid=${pre}`;
+              return `pre${bump} --preid=${pre}`;
+            }
+            return bump;
+
+      - name: Bump version (in-memory)
+        id: bumped-version
+        run: |
+          npm version ${{ steps.next-version.outputs.result }} --no-git-tag-version
+          echo "version=$(node -p "require('./package.json').version")" >> "$GITHUB_OUTPUT"
+
+      - name: Log release info
+        run: |
+          echo "📦 ${{ steps.current-version.outputs.version }} -> ${{ steps.bumped-version.outputs.version }}"
+          echo "🔼 Bump: ${{ inputs.bump }}"
+          echo "🏷️  Pre-release: ${{ inputs.pre_release }}"
+
+  quality:
+    name: Quality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: ./.github/workflows/actions/quality
+
+  build:
+    name: Build (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    needs: [version, quality]
+    strategy:
+      fail-fast: true
+      matrix:
+        browser: [chrome, firefox, edge]
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install
+        run: bun install --frozen-lockfile
+
+      - name: Set version
+        run: npm version ${{ needs.version.outputs.next-version }} --no-git-tag-version --allow-same-version
+
+      - name: Zip extension
+        run: bunx wxt zip -b ${{ matrix.browser }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: hls-catcher-${{ matrix.browser }}
+          path: .output/*.zip
+          if-no-files-found: error
+
+  release:
+    name: Tag & GitHub Release
+    runs-on: ubuntu-latest
+    needs: [version, build]
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -R dist
+
+      - name: Commit version bump & tag
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          npm version ${{ needs.version.outputs.next-version }} --no-git-tag-version --allow-same-version
+          git add package.json
+          git commit -m "chore(release): v${{ needs.version.outputs.next-version }} [skip ci]"
+          git tag "v${{ needs.version.outputs.next-version }}"
+          git push origin HEAD
+          git push origin "v${{ needs.version.outputs.next-version }}"
+
+      - name: Generate changelog
+        id: changelog
+        uses: mikepenz/release-changelog-builder-action@v6
+        with:
+          configuration: .github/changelog-config.json
+          mode: COMMIT
+          toTag: v${{ needs.version.outputs.next-version }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ needs.version.outputs.next-version }}
+          name: v${{ needs.version.outputs.next-version }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          prerelease: ${{ inputs.pre_release != 'none' }}
+          make_latest: ${{ inputs.pre_release == 'none' }}
+          files: dist/*.zip
+          fail_on_unmatched_files: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

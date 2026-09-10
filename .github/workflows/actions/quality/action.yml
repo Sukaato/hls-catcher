@@ -1,0 +1,27 @@
+name: Code Quality
+description: Biome format + lint and the WXT / vue-tsc type check
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - name: Install
+      run: bun install --frozen-lockfile
+      shell: bash
+
+    - name: Format check
+      run: bunx biome format
+      shell: bash
+
+    - name: Lint check
+      run: bunx biome lint
+      shell: bash
+
+    - name: Type check
+      # `bun install` postinstall already runs `wxt prepare` (generates .wxt types)
+      run: bun run compile
+      shell: bash

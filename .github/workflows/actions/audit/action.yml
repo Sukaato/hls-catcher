@@ -1,0 +1,19 @@
+name: Dependency Audit
+description: Run bun audit to check for known vulnerabilities
+
+runs:
+  using: composite
+  steps:
+    - name: Setup Bun
+      uses: oven-sh/setup-bun@v2
+      with:
+        bun-version: latest
+
+    - name: Install
+      run: bun install --frozen-lockfile
+      shell: bash
+
+    - name: Audit dependencies
+      # Non-blocking: surfaces advisories without failing unrelated PRs.
+      run: bun audit --audit-level=high || echo "::warning::bun audit reported advisories"
+      shell: bash

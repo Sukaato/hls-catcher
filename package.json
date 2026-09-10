@@ -1,0 +1,36 @@
+{
+  "name": "hls-catcher",
+  "description": "Détecte les flux HLS (.m3u8) d'une page et les ouvre seuls dans un onglet, avec choix de la qualité.",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "compile": "vue-tsc --noEmit",
+    "typecheck": "wxt prepare && vue-tsc --noEmit",
+    "format": "biome format --write",
+    "format:check": "biome format",
+    "lint": "biome lint --write",
+    "lint:check": "biome lint",
+    "check": "biome check --write",
+    "postinstall": "wxt prepare"
+  },
+  "dependencies": {
+    "hls.js": "^1.7.2",
+    "vue": "^3.5.29"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.0",
+    "@wxt-dev/module-vue": "^1.0.3",
+    "typescript": "^5.9.3",
+    "vite": "^8.1.5",
+    "vue-tsc": "^3.2.5",
+    "web-ext": "^10.5.0",
+    "wxt": "^0.21.3"
+  }
+}

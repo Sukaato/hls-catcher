@@ -1,0 +1,272 @@
+import { parsePlaylist } from '@/lib/m3u8';
+import type { CapturedStream } from '@/lib/types';
+
+const IS_CHROME = import.meta.env.CHROME;
+const SESSION_KEY = 'hlscatcher:streams';
+
+// Twitch master playlist, e.g.
+//   https://usher.ttvnw.net/api/v2/channel/hls/<channel>.m3u8?...
+//   https://usher.ttvnw.net/api/channel/hls/<channel>.m3u8?...   (older)
+const USHER_URLS = [
+  '*://usher.ttvnw.net/api/*/channel/hls/*',
+  '*://usher.ttvnw.net/api/channel/hls/*',
+];
+const CHANNEL_RE = /\/channel\/hls\/([^/.?#]+)\.m3u8/i;
+
+function twitchChannel(url: string): string | undefined {
+  return CHANNEL_RE.exec(url)?.[1]?.toLowerCase();
+}
+
+export default defineBackground(() => {
+  /** tabId -> (url -> stream). */
+  const store = new Map<number, Map<string, CapturedStream>>();
+  /** player tabId -> DNR session rule id (referer spoofing). */
+  const playerRules = new Map<number, number>();
+  let ruleIdSeq = 2000;
+
+  // ----------------------------------------------------------------- helpers --
+  const idFor = (url: string): string => {
+    let h = 0;
+    for (let i = 0; i < url.length; i++) h = (Math.imul(h, 31) + url.charCodeAt(i)) | 0;
+    return `s${(h >>> 0).toString(36)}`;
+  };
+
+  const tabMap = (tabId: number): Map<string, CapturedStream> => {
+    let m = store.get(tabId);
+    if (!m) {
+      m = new Map();
+      store.set(tabId, m);
+    }
+    return m;
+  };
+
+  const headerMap = (list?: Array<{ name: string; value?: string }>): Record<string, string> => {
+    const out: Record<string, string> = {};
+    for (const it of list ?? []) out[it.name.toLowerCase()] = it.value ?? '';
+    return out;
+  };
+
+  const updateBadge = (tabId: number): void => {
+    const n = store.get(tabId)?.size ?? 0;
+    browser.action.setBadgeText({ tabId, text: n ? String(n) : '' }).catch(() => {});
+    browser.action.setBadgeBackgroundColor({ color: '#7c3aed' }).catch(() => {});
+  };
+
+  // ----------------------------------------------------------- persistence --
+  // The service worker can be suspended mid-session; the Twitch master playlist
+  // is only requested once at playback start, so keep a copy in session storage.
+  let persistTimer: ReturnType<typeof setTimeout> | undefined;
+  const schedulePersist = (): void => {
+    if (persistTimer) return;
+    persistTimer = setTimeout(() => {
+      persistTimer = undefined;
+      const dump: Record<string, CapturedStream[]> = {};
+      for (const [tabId, m] of store) dump[tabId] = [...m.values()];
+      browser.storage.session.set({ [SESSION_KEY]: dump }).catch(() => {});
+    }, 400);
+  };
+
+  const restore = async (): Promise<void> => {
+    try {
+      const got = await browser.storage.session.get(SESSION_KEY);
+      const dump = got[SESSION_KEY] as Record<string, CapturedStream[]> | undefined;
+      if (!dump) return;
+      for (const [tabId, list] of Object.entries(dump)) {
+        if (store.has(Number(tabId))) continue;
+        const m = new Map<string, CapturedStream>();
+        for (const s of list) m.set(s.url, s);
+        store.set(Number(tabId), m);
+        updateBadge(Number(tabId));
+      }
+    } catch {
+      /* first run, nothing stored */
+    }
+  };
+  void restore();
+
+  // -------------------------------------------------------- fetch + analyse --
+  async function fetchAndParse(stream: CapturedStream) {
+    const resp = await fetch(stream.url, { credentials: 'include' });
+    if (!resp.ok) throw new Error(`HTTP ${resp.status} en récupérant la playlist`);
+    const text = await resp.text();
+    if (!text.includes('#EXTM3U')) {
+      throw new Error('La réponse ne ressemble pas à une playlist HLS');
+    }
+    return parsePlaylist(text, stream.url);
+  }
+
+  async function analyzeAndStore(tabId: number, url: string, force = false): Promise<void> {
+    const stream = store.get(tabId)?.get(url);
+    if (!stream) return;
+    if (stream.analyzedAt && !force) return;
+    try {
+      const result = await fetchAndParse(stream);
+      stream.type = result.kind;
+      stream.variants = result.variants;
+      stream.audio = result.audio;
+      stream.analyzeError = undefined;
+    } catch (e) {
+      stream.analyzeError = e instanceof Error ? e.message : String(e);
+    }
+    stream.analyzedAt = Date.now();
+    schedulePersist();
+  }
+
+  const record = (tabId: number, url: string, referer?: string): void => {
+    if (tabId < 0) return;
+    const channel = twitchChannel(url);
+    if (!channel) return; // only the channel master playlist
+
+    const m = tabMap(tabId);
+    const now = Date.now();
+    const cur = m.get(url);
+    if (cur) {
+      cur.lastSeen = now;
+      cur.count++;
+      if (referer && !cur.referer) cur.referer = referer;
+    } else {
+      m.set(url, {
+        id: idFor(url),
+        url,
+        tabId,
+        channel,
+        referer: referer || `https://www.twitch.tv/${channel}`,
+        firstSeen: now,
+        lastSeen: now,
+        count: 1,
+        type: 'unknown',
+      });
+      // Parse it now, while the single-use token in the URL is still fresh.
+      void analyzeAndStore(tabId, url);
+    }
+    updateBadge(tabId);
+    schedulePersist();
+  };
+
+  // --------------------------------------------------------------- detection --
+  const reqSpec = ['requestHeaders', ...(IS_CHROME ? ['extraHeaders'] : [])];
+  browser.webRequest.onSendHeaders.addListener(
+    (d) => {
+      const h = headerMap(d.requestHeaders);
+      record(d.tabId, d.url, h.referer);
+    },
+    { urls: USHER_URLS },
+    reqSpec as string[] as never,
+  );
+
+  // --------------------------------------------------------------- lifecycle --
+  browser.tabs.onUpdated.addListener((tabId, info) => {
+    // Top-level navigation → the old streams no longer belong to this page.
+    if (info.status === 'loading' && info.url) {
+      store.delete(tabId);
+      updateBadge(tabId);
+      schedulePersist();
+    }
+  });
+
+  browser.tabs.onRemoved.addListener((tabId) => {
+    store.delete(tabId);
+    void removePlayerRule(tabId);
+    schedulePersist();
+  });
+
+  // ----------------------------------------------- referer spoof for player --
+  async function addPlayerRule(tabId: number, referer: string): Promise<void> {
+    if (!IS_CHROME) return;
+    const id = ruleIdSeq++;
+    playerRules.set(tabId, id);
+
+    let origin = '';
+    try {
+      origin = new URL(referer).origin;
+    } catch {
+      /* keep empty */
+    }
+
+    const requestHeaders: Array<{ header: string; operation: 'set'; value: string }> = [
+      { header: 'referer', operation: 'set', value: referer },
+    ];
+    if (origin) requestHeaders.push({ header: 'origin', operation: 'set', value: origin });
+
+    try {
+      await browser.declarativeNetRequest.updateSessionRules({
+        addRules: [
+          {
+            id,
+            priority: 1,
+            condition: {
+              tabIds: [tabId],
+              resourceTypes: ['xmlhttprequest', 'media', 'other'],
+            },
+            action: { type: 'modifyHeaders', requestHeaders },
+          },
+        ] as never,
+      });
+    } catch (e) {
+      console.warn('[HLS Catcher] could not add referer rule', e);
+    }
+  }
+
+  async function removePlayerRule(tabId: number): Promise<void> {
+    const id = playerRules.get(tabId);
+    if (id == null) return;
+    playerRules.delete(tabId);
+    try {
+      await browser.declarativeNetRequest.updateSessionRules({ removeRuleIds: [id] });
+    } catch {
+      /* rule already gone */
+    }
+  }
+
+  // ---------------------------------------------------------------- messages --
+  browser.runtime.onMessage.addListener((msg: Record<string, unknown>, _sender, sendResponse) => {
+    void (async () => {
+      try {
+        const tabId = msg.tabId as number;
+
+        switch (msg.type) {
+          case 'getStreams': {
+            const streams = [...tabMap(tabId).values()].sort((a, b) => b.lastSeen - a.lastSeen);
+            sendResponse({ ok: true, streams });
+            break;
+          }
+          case 'clearStreams': {
+            store.delete(tabId);
+            updateBadge(tabId);
+            schedulePersist();
+            sendResponse({ ok: true, streams: [] });
+            break;
+          }
+          case 'analyze': {
+            const stream = [...tabMap(tabId).values()].find((x) => x.id === msg.streamId);
+            if (!stream) {
+              sendResponse({ ok: false, error: 'Flux introuvable' });
+              break;
+            }
+            await analyzeAndStore(tabId, stream.url, true);
+            sendResponse({ ok: !stream.analyzeError, stream, error: stream.analyzeError });
+            break;
+          }
+          case 'openPlayer': {
+            const referer = (msg.referer as string | undefined) || undefined;
+            const url =
+              browser.runtime.getURL('/player.html' as never) +
+              `?src=${encodeURIComponent(msg.url as string)}` +
+              (referer ? `&referer=${encodeURIComponent(referer)}` : '') +
+              (msg.title ? `&title=${encodeURIComponent(msg.title as string)}` : '');
+            const tab = await browser.tabs.create({ url });
+            if (tab.id != null && referer) await addPlayerRule(tab.id, referer);
+            sendResponse({ ok: true });
+            break;
+          }
+          default:
+            sendResponse({ ok: false, error: 'Message inconnu' });
+        }
+      } catch (e) {
+        sendResponse({ ok: false, error: e instanceof Error ? e.message : String(e) });
+      }
+    })();
+
+    return true; // keep the message channel open for the async reply
+  });
+});

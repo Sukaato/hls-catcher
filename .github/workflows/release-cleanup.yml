@@ -1,0 +1,56 @@
+name: Cleanup Pre-releases
+
+on:
+  schedule:
+    - cron: '0 12 * * *'
+  workflow_dispatch:
+    inputs:
+      retention_days:
+        description: 'Delete pre-releases older than N days'
+        required: false
+        default: '30'
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    name: Prune old pre-releases
+    runs-on: ubuntu-latest
+    steps:
+      - name: Delete expired pre-releases and their tags
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const retentionDays = Number('${{ github.event.inputs.retention_days || 30 }}');
+            const cutoff = Date.now() - retentionDays * 24 * 60 * 60 * 1000;
+
+            const releases = await github.paginate(github.rest.repos.listReleases, {
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              per_page: 100,
+            });
+
+            let deleted = 0;
+            for (const release of releases) {
+              if (!release.prerelease) continue;
+              if (new Date(release.created_at).getTime() >= cutoff) continue;
+
+              core.info(`Deleting pre-release ${release.tag_name} (${release.created_at})`);
+              await github.rest.repos.deleteRelease({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                release_id: release.id,
+              });
+              try {
+                await github.rest.git.deleteRef({
+                  owner: context.repo.owner,
+                  repo: context.repo.repo,
+                  ref: `tags/${release.tag_name}`,
+                });
+              } catch (e) {
+                core.warning(`Could not delete tag ${release.tag_name}: ${e.message}`);
+              }
+              deleted++;
+            }
+            core.info(`Done. ${deleted} pre-release(s) removed.`);
