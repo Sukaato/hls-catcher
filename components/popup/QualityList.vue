@@ -1,10 +1,13 @@
 <script setup lang="ts">
 import { useCopy } from '@/composables/useCopy';
 import type { Variant } from '@/lib/types';
-import { Check, Copy, Play } from '@lucide/vue';
+import { Check, Copy, Lock, Play } from '@lucide/vue';
 
 defineProps<{ variants: Variant[] }>();
-const emit = defineEmits<{ open: [uri: string, label: string] }>();
+const emit = defineEmits<{
+  open: [uri: string, label: string];
+  force: [uri: string, label: string];
+}>();
 
 const { copied, copy } = useCopy();
 </script>
@@ -16,6 +19,14 @@ const { copied, copy } = useCopy();
       <span class="flex-1" />
       <button type="button" class="btn-mini" @click="emit('open', v.uri, v.label)">
         <Play :size="12" /> Ouvrir
+      </button>
+      <button
+        type="button"
+        class="btn-mini"
+        title="Remplacer le flux du lecteur de la page Twitch par cette qualité"
+        @click="emit('force', v.uri, v.label)"
+      >
+        <Lock :size="12" /> Forcer
       </button>
       <button type="button" class="btn-mini" :title="copied === v.uri ? 'Copié' : 'Copier'" @click="copy(v.uri)">
         <component :is="copied === v.uri ? Check : Copy" :size="12" />

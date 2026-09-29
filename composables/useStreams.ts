@@ -42,6 +42,14 @@ export function useStreams() {
     window.close();
   }
 
+  const forceError = ref('');
+
+  /** Make the player of the Twitch page itself play this variant. */
+  async function forceQuality(url: string, label: string): Promise<void> {
+    const res = await send({ type: 'forceStream', tabId: tabId.value, url, label });
+    forceError.value = res?.ok ? '' : (res?.error ?? 'Échec');
+  }
+
   function openRaw(url: string): void {
     void browser.tabs.create({ url });
   }
@@ -62,5 +70,5 @@ export function useStreams() {
     if (timer) clearInterval(timer);
   });
 
-  return { streams, ready, retry, openPlayer, openRaw, clearAll };
+  return { streams, ready, forceError, forceQuality, retry, openPlayer, openRaw, clearAll };
 }

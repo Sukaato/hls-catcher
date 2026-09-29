@@ -29,6 +29,30 @@ async function tryPlay(v: HTMLVideoElement): Promise<void> {
   }
 }
 
+/**
+ * Chrome (134+) enters Picture-in-Picture automatically when the tab goes to the
+ * background, provided the page registers an `enterpictureinpicture` media session
+ * action while media is playing. A plain `visibilitychange` handler can't do this:
+ * requestPictureInPicture() needs a user gesture.
+ */
+function setAutoPip(v: HTMLVideoElement | null): void {
+  if (!('mediaSession' in navigator)) return;
+  try {
+    navigator.mediaSession.setActionHandler(
+      'enterpictureinpicture' as MediaSessionAction,
+      v
+        ? () => {
+            if (document.pictureInPictureElement !== v) {
+              void v.requestPictureInPicture().catch(() => {});
+            }
+          }
+        : null,
+    );
+  } catch {
+    /* action not supported by this browser version */
+  }
+}
+
 /** Drives an <video> from an HLS URL via hls.js (with a native-HLS fallback). */
 export function usePlayer(src: string) {
   const video = ref<HTMLVideoElement | null>(null);
@@ -53,6 +77,8 @@ export function usePlayer(src: string) {
       errorMsg.value = 'Aucune URL de flux fournie (paramètre ?src= manquant).';
       return;
     }
+
+    setAutoPip(v);
 
     v.addEventListener('playing', () => {
       status.value = 'playing';
@@ -97,6 +123,7 @@ export function usePlayer(src: string) {
 
   onBeforeUnmount(() => {
     hls?.destroy();
+    setAutoPip(null);
   });
 
   return { video, levels, currentLevel, status, errorMsg, setLevel };

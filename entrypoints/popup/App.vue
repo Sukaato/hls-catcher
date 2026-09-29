@@ -4,7 +4,8 @@ import PopupHeader from '@/components/popup/PopupHeader.vue';
 import StreamCard from '@/components/popup/StreamCard.vue';
 import { useStreams } from '@/composables/useStreams';
 
-const { streams, ready, retry, openPlayer, openRaw, clearAll } = useStreams();
+const { streams, ready, forceError, forceQuality, retry, openPlayer, openRaw, clearAll } =
+  useStreams();
 </script>
 
 <template>
@@ -21,8 +22,11 @@ const { streams, ready, retry, openPlayer, openRaw, clearAll } = useStreams();
         @open="openPlayer"
         @open-raw="openRaw"
         @retry="retry"
+        @force="forceQuality"
       />
     </div>
+
+    <p v-if="forceError" class="px-3 pb-1 text-[12.5px] text-danger">{{ forceError }}</p>
 
     <footer class="border-t border-border px-3 pt-2 pb-3 text-[11.5px] text-muted">
       Le stream s'ouvre dans un lecteur intégré (hls.js). « URL brute » = lien direct pour VLC/mpv.

@@ -10,6 +10,7 @@ const emit = defineEmits<{
   open: [url: string, stream: CapturedStream, label?: string];
   openRaw: [url: string];
   retry: [stream: CapturedStream];
+  force: [uri: string, label: string];
 }>();
 
 const { copied, copy } = useCopy();
@@ -65,6 +66,7 @@ const audioSummary = computed(() =>
       v-if="stream.variants?.length"
       :variants="stream.variants"
       @open="(uri, label) => emit('open', uri, stream, label)"
+      @force="(uri, label) => emit('force', uri, label)"
     />
 
     <p v-if="stream.audio?.length" class="mt-2 text-[12.5px] text-muted">

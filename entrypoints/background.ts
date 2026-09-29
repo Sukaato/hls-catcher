@@ -247,6 +247,25 @@ export default defineBackground(() => {
             sendResponse({ ok: !stream.analyzeError, stream, error: stream.analyzeError });
             break;
           }
+          case 'forceStream': {
+            // Hand the target to the content script (same isolated world), then run it.
+            await browser.scripting.executeScript({
+              target: { tabId },
+              func: (url: string, label: string) => {
+                (window as never as { __hlsCatcherForce: unknown }).__hlsCatcherForce = {
+                  url,
+                  label,
+                };
+              },
+              args: [msg.url as string, msg.label as string],
+            });
+            await browser.scripting.executeScript({
+              target: { tabId },
+              files: ['/content-scripts/force.js' as never],
+            });
+            sendResponse({ ok: true });
+            break;
+          }
           case 'openPlayer': {
             const referer = (msg.referer as string | undefined) || undefined;
             const url =
